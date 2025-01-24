@@ -59,4 +59,5 @@ jobs:
           app-name: 'mytaxiutem'
           slot-name: 'Production'
           package: .
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_840541BDFCE24AECAC925176603D2867 }}
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE }}
+
