@@ -19,7 +19,7 @@ const client = new MongoClient(uri, {
 
 app.use(express.json());
 
-// JWT verification middleware (reads token from the request body)
+// JWT verification middleware
 function verifyToken(req, res, next) {
   const token = req.body.token; // Retrieve token from request body
 
@@ -96,7 +96,6 @@ app.get('/drivers/view-rides', verifyToken, async (req, res) => {
     const rides = await client.db("MyTaxiDB").collection("Rides").find({ status: "pending" }).toArray();
 
     if (rides.length === 0) {
-      console.log("There are no jobs available for drivers at the moment.");
       return res.status(200).send("There are no jobs available at the moment.");
     }
 
@@ -106,7 +105,6 @@ app.get('/drivers/view-rides', verifyToken, async (req, res) => {
     res.status(500).send("Error retrieving rides");
   }
 });
-
 
 // Driver Accept Ride
 app.post('/drivers/accept-ride', verifyToken, async (req, res) => {
@@ -126,6 +124,19 @@ app.post('/drivers/accept-ride', verifyToken, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).send("Error accepting ride");
+  }
+});
+
+// Driver Delete Account
+app.delete('/drivers/delete-account', verifyToken, async (req, res) => {
+  if (req.identify.role !== 'driver') return res.status(403).send("Access Denied");
+
+  try {
+    await client.db("MyTaxiDB").collection("Drivers").deleteOne({ _id: new ObjectId(req.identify.userId) });
+    res.status(200).send("Driver account deleted successfully");
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Error deleting account");
   }
 });
 
@@ -200,7 +211,6 @@ app.post('/passengers/cancel-ride', verifyToken, async (req, res) => {
   try {
     const passengerId = req.identify.userId;
 
-    // Find the active ride for the passenger
     const activeRide = await client.db("MyTaxiDB").collection("Rides").findOne({
       passengerId: passengerId,
       status: { $in: ["pending", "accepted"] }
@@ -208,7 +218,6 @@ app.post('/passengers/cancel-ride', verifyToken, async (req, res) => {
 
     if (!activeRide) return res.status(400).send("No active ride to cancel");
 
-    // Update the ride status to "cancelled" and include cancellation details
     await client.db("MyTaxiDB").collection("Rides").updateOne(
       { _id: activeRide._id },
       { $set: { status: "cancelled", cancelledAt: new Date(), cancelledBy: "passenger" } }
@@ -221,6 +230,18 @@ app.post('/passengers/cancel-ride', verifyToken, async (req, res) => {
   }
 });
 
+// Passenger Delete Account
+app.delete('/passengers/delete-account', verifyToken, async (req, res) => {
+  if (req.identify.role !== 'passenger') return res.status(403).send("Access Denied");
+
+  try {
+    await client.db("MyTaxiDB").collection("Passengers").deleteOne({ _id: new ObjectId(req.identify.userId) });
+    res.status(200).send("Passenger account deleted successfully");
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Error deleting account");
+  }
+});
 
 //// ADMIN ENDPOINTS ////
 
@@ -229,14 +250,12 @@ app.post('/admin/view-rides', async (req, res) => {
   const { username, password } = req.body;
 
   try {
-    // Validate admin credentials
     const admin = await client.db("MyTaxiDB").collection("Admins").findOne({ username });
     if (!admin) return res.status(404).send("Admin not found");
 
     const isPasswordValid = bcrypt.compareSync(password, admin.password);
     if (!isPasswordValid) return res.status(401).send("Invalid password");
 
-    // Fetch all rides
     const rides = await client.db("MyTaxiDB").collection("Rides").find().toArray();
     res.status(200).send(rides);
   } catch (err) {
@@ -250,14 +269,12 @@ app.post('/admin/driver-details', async (req, res) => {
   const { username, password, driverId } = req.body;
 
   try {
-    // Validate admin credentials
     const admin = await client.db("MyTaxiDB").collection("Admins").findOne({ username });
     if (!admin) return res.status(404).send("Admin not found");
 
     const isPasswordValid = bcrypt.compareSync(password, admin.password);
     if (!isPasswordValid) return res.status(401).send("Invalid password");
 
-    // Fetch driver details
     const driver = await client.db("MyTaxiDB").collection("Drivers").findOne({ _id: new ObjectId(driverId) });
     if (!driver) return res.status(404).send("Driver not found");
 
@@ -273,14 +290,12 @@ app.post('/admin/passenger-details', async (req, res) => {
   const { username, password, passengerId } = req.body;
 
   try {
-    // Validate admin credentials
     const admin = await client.db("MyTaxiDB").collection("Admins").findOne({ username });
     if (!admin) return res.status(404).send("Admin not found");
 
     const isPasswordValid = bcrypt.compareSync(password, admin.password);
     if (!isPasswordValid) return res.status(401).send("Invalid password");
 
-    // Fetch passenger details
     const passenger = await client.db("MyTaxiDB").collection("Passengers").findOne({ _id: new ObjectId(passengerId) });
     if (!passenger) return res.status(404).send("Passenger not found");
 
